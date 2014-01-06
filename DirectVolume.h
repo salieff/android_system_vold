@@ -88,6 +88,7 @@ private:
     int getMajorNumberForBadPartition(int part_num);
 #endif
 
+    int mtkUsbStrncmp(const char *devPath, const char *myPath, size_t myLen);
 };
 
 typedef android::List<DirectVolume *> DirectVolumeCollection;

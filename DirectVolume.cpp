@@ -99,7 +99,7 @@ int DirectVolume::handleBlockEvent(NetlinkEvent *evt) {
 
     PathCollection::iterator  it;
     for (it = mPaths->begin(); it != mPaths->end(); ++it) {
-        if (!strncmp(dp, *it, strlen(*it))) {
+        if (!strncmp(dp, *it, strlen(*it)) || !mtkUsbStrncmp(dp, *it, strlen(*it))) {
             /* We can handle this disk */
             int action = evt->getAction();
             const char *devtype = evt->findParam("DEVTYPE");
@@ -513,4 +513,110 @@ int DirectVolume::getVolInfo(struct volume_info *v)
     /* Other fields of struct volume_info are filled in by the caller or cryptfs.c */
 
     return 0;
+}
+
+/*
+ * Compare sysfs paths without taking usb host-target details
+ * /devices/platform/mt_usb/usb1/1-1/1-1:1.0/host9/target9:0:0/9:0:0:0/block/sda/sda1 -> /devices/platform/mt_usb/usb1/sda/sda1
+ */
+int DirectVolume::mtkUsbStrncmp(const char *devPath, const char *myPath, size_t myLen)
+{
+    char *dubDevPath = strdup(devPath);
+    if (!dubDevPath)
+        return -1;
+
+    char *save_ptr;
+
+    char *dev = strtok_r(dubDevPath, "/", &save_ptr);
+    if (!dev || strcmp(dev, "devices"))
+    {
+        free(dubDevPath);
+        return -1;
+    }
+
+    char *plt = strtok_r(NULL, "/", &save_ptr);
+    if (!plt || strcmp(plt, "platform"))
+    {
+        free(dubDevPath);
+        return -1;
+    }
+
+    char *mtusb = strtok_r(NULL, "/", &save_ptr);
+    if (!mtusb || strcmp(mtusb, "mt_usb"))
+    {
+        free(dubDevPath);
+        return -1;
+    }
+
+    char *usb1 = strtok_r(NULL, "/", &save_ptr);
+    if (!usb1 || strcmp(usb1, "usb1"))
+    {
+        free(dubDevPath);
+        return -1;
+    }
+
+    // Search for host
+    bool found = false;
+    char *tok = 0;
+    while ((tok = strtok_r(NULL, "/", &save_ptr)) != 0)
+    {
+        if (strncmp(tok, "host", 4))
+            continue;
+
+        found = true;
+        break;
+    }
+
+    if (!found)
+    {
+        free(dubDevPath);
+        return -1;
+    }
+
+    char *targ = strtok_r(NULL, "/", &save_ptr);
+    if (!targ || strncmp(targ, "target", 6))
+    {
+        free(dubDevPath);
+        return -1;
+    }
+
+    // Search for block
+    found = false;
+    tok = 0;
+    while ((tok = strtok_r(NULL, "/", &save_ptr)) != 0)
+    {
+        if (strcmp(tok, "block"))
+            continue;
+
+        found = true;
+        break;
+    }
+
+    if (!found)
+    {
+        free(dubDevPath);
+        return -1;
+    }
+
+    char *newDevPath = (char *)malloc(strlen(devPath) + 1);
+    if (!newDevPath)
+    {
+        free(dubDevPath);
+        return -1;
+    }
+
+    strcpy(newDevPath, "/devices/platform/mt_usb/usb1");
+    char *tail;
+    while ((tail = strtok_r(NULL, "/", &save_ptr)) != 0)
+    {
+        strcat(newDevPath, "/");
+        strcat(newDevPath, tail);
+    }
+
+    free(dubDevPath);
+
+    int ret = strncmp(newDevPath, myPath, myLen);
+
+    free(newDevPath);
+    return ret;
 }
