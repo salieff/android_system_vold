@@ -585,71 +585,14 @@ int Volume::mountVol() {
             return -1;
         }
 
-        /*
-         * Now that the bindmount trickery is done, atomically move the
-         * whole subtree to expose it to non priviledged users.
-         */
-        if (isUnixFs) {
-            /*
-             * In case of a unix filesystem we're using the sdcard daemon
-             * to expose the subtree to non privileged users to avoid
-             * permission issues for data created by apps.
-             */
-            const char* label = getLabel();
-            char* fuseSrc = (char*) malloc(strlen(FUSEDIR) + strlen("/") + strlen(label) + 1);
-            sprintf(fuseSrc, "%s/%s", FUSEDIR, label);
-            bool failed = false;
 
-            // Create fuse dir if not exists
-            if (access(fuseSrc, R_OK | W_OK)) {
-                if (mkdir(fuseSrc, 0775)) {
-                    SLOGE("Failed to create %s (%s)", fuseSrc, strerror(errno));
-                    failed = true;
-                }
-            }
-
-            // Move subtree to fuse dir
-            if (!failed && doMoveMount("/mnt/secure/staging", fuseSrc, false)) {
-                SLOGE("Failed to move mount (%s)", strerror(errno));
-                umount("/mnt/secure/staging");
-                failed = true;
-            }
-
-            // Set owner and group on fuse dir
-            if (!failed && chown(fuseSrc, FUSE_SDCARD_UID, FUSE_SDCARD_GID)) {
-                SLOGE("Failed to set owner/group on %s (%s)", fuseSrc, strerror(errno));
-                failed = true;
-            }
-
-            // Set permissions (775) on fuse dir
-            if (!failed && chmod(fuseSrc, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH)) {
-                SLOGE("Failed to set permissions on %s (%s)", fuseSrc, strerror(errno));
-                failed = true;
-            }
-
-            // Invoke the sdcard daemon to expose it
-            if(!failed && doFuseMount(fuseSrc, getMountpoint())) {
-                SLOGE("Failed to fuse mount (%s) -> (%s)", fuseSrc, getMountpoint());
-                failed = true;
-            }
-
-            free(fuseSrc);
-
-            if (failed) {
-                setState(Volume::State_Idle);
-                return -1;
-            }
-
-        } else {
-
-            if (doMoveMount("/mnt/secure/staging", getMountpoint(), false)) {
-                SLOGE("Failed to move mount (%s)", strerror(errno));
-                umount("/mnt/secure/staging");
-                setState(Volume::State_Idle);
-                return -1;
-            }
-
+        if (doMoveMount("/mnt/secure/staging", getMountpoint(), false)) {
+            SLOGE("Failed to move mount (%s)", strerror(errno));
+            umount("/mnt/secure/staging");
+            setState(Volume::State_Idle);
+            return -1;
         }
+
         setState(Volume::State_Mounted);
         mCurrentlyMountedKdev = deviceNodes[i];
         return 0;
