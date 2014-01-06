@@ -22,9 +22,12 @@
 class Exfat {
 public:
     static int doMount(const char *fsPath, const char *mountPoint, bool ro, bool remount,
-            bool executable, int ownerUid, int ownerGid, int permMask);
+            bool executable, int ownerUid, int ownerGid, int permMask, bool createLost);
     static int check(const char *fsPath);
     static int format(const char *fsPath);
+
+    static bool moduleLoaded;
+    static int loadModule();
 };
 
 #endif

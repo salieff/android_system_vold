@@ -550,7 +550,7 @@ int Volume::mountVol() {
                 }
 
                 if (Exfat::doMount(devicePath, "/mnt/secure/staging", false, false, false,
-                        AID_SYSTEM, gid, 0702)) {
+                        AID_SYSTEM, gid, 0702, true)) {
                     SLOGE("%s failed to mount via EXFAT (%s)\n", devicePath, strerror(errno));
                     continue;
                 }

@@ -41,46 +41,77 @@
 
 #include "Exfat.h"
 
+bool Exfat::moduleLoaded = false;
+
 static char EXFAT_FSCK[] = "/system/bin/fsck.exfat";
 static char EXFAT_MKFS[] = "/system/bin/mkfs.exfat";
-static char EXFAT_MOUNT[] = "/system/bin/mount.exfat";
+static char INSMOD_PATH[] = "/system/bin/insmod";
+static char EXFAT_MODULE[] = "/system/lib/modules/exfat.ko";
 
 extern "C" int logwrap(int argc, const char **argv, int background);
 
 int Exfat::doMount(const char *fsPath, const char *mountPoint,
                  bool ro, bool remount, bool executable,
-                 int ownerUid, int ownerGid, int permMask) {
+                 int ownerUid, int ownerGid, int permMask, bool createLost) {
+{
+    if (!moduleLoaded)
+    {
+        int lkm_rc = loadModule();
+        if (lkm_rc)
+            return lkm_rc;
 
-    int rc = -1;
+        moduleLoaded = true;
+    }
+
+    int rc;
+    unsigned long flags;
     char mountData[255];
-    const char *args[6];
 
-    if (access(EXFAT_MOUNT, X_OK)) {
-        SLOGE("Unable to mount, exFAT FUSE helper not found!");
-        return rc;
+    flags = MS_NODEV | MS_NOSUID | MS_DIRSYNC;
+
+    flags |= (executable ? 0 : MS_NOEXEC);
+    flags |= (ro ? MS_RDONLY : 0);
+    flags |= (remount ? MS_REMOUNT : 0);
+
+    /*
+     * Note: This is a temporary hack. If the sampling profiler is enabled,
+     * we make the SD card world-writable so any process can write snapshots.
+     *
+     * TODO: Remove this code once we have a drop box in system_server.
+     */
+    char value[PROPERTY_VALUE_MAX];
+    property_get("persist.sampling_profiler", value, "");
+    if (value[0] == '1') {
+        SLOGW("The SD card is world-writable because the"
+            " 'persist.sampling_profiler' system property is set to '1'.");
+        permMask = 0;
     }
 
     sprintf(mountData,
-            "noatime,nodev,nosuid,dirsync,uid=%d,gid=%d,fmask=%o,dmask=%o,%s,%s",
-            ownerUid, ownerGid, permMask, permMask,
-            (executable ? "exec" : "noexec"),
-            (ro ? "ro" : "rw"));
+            "uid=%d,gid=%d,fmask=%o,dmask=%o",
+            ownerUid, ownerGid, permMask, permMask);
 
-    args[0] = EXFAT_MOUNT;
-    args[1] = "-o";
-    args[2] = mountData;
-    args[3] = fsPath;
-    args[4] = mountPoint;
-    args[5] = NULL;
-
-    SLOGW("Executing exFAT mount (%s) -> (%s)", fsPath, mountPoint);
-
-    rc = logwrap(5, args, 1);
+    rc = mount(fsPath, mountPoint, "exfat", flags, mountData);
 
     if (rc && errno == EROFS) {
         SLOGE("%s appears to be a read only filesystem - retrying mount RO", fsPath);
-        strcat(mountData, ",ro");
-        rc = logwrap(5, args, 1);
+        flags |= MS_RDONLY;
+        rc = mount(fsPath, mountPoint, "exfat", flags, mountData);
+    }
+
+    if (rc == 0 && createLost) {
+        char *lost_path;
+        asprintf(&lost_path, "%s/LOST.DIR", mountPoint);
+        if (access(lost_path, F_OK)) {
+            /*
+             * Create a LOST.DIR in the root so we have somewhere to put
+             * lost cluster chains (fsck_msdos doesn't currently do this)
+             */
+            if (mkdir(lost_path, 0755)) {
+                SLOGE("Unable to create LOST.DIR (%s)", strerror(errno));
+            }
+        }
+        free(lost_path);
     }
 
     return rc;
@@ -132,8 +163,6 @@ int Exfat::check(const char *fsPath) {
 }
 
 int Exfat::format(const char *fsPath) {
-
-    int fd;
     const char *args[3];
     int rc = -1;
 
@@ -153,6 +182,37 @@ int Exfat::format(const char *fsPath) {
         return 0;
     } else {
         SLOGE("Format (exFAT) failed (unknown exit code %d)", rc);
+        errno = EIO;
+        return -1;
+    }
+    return 0;
+}
+
+int Exfat::loadModule() {
+    const char *args[3];
+    int rc = -1;
+
+    if (access(INSMOD_PATH, X_OK)) {
+        SLOGE("Unable to load exfat.ko module, insmod not found.");
+        return -1;
+    }
+
+    if (access(EXFAT_MODULE, R_OK)) {
+        SLOGE("Unable to load exfat.ko module, exfat.ko not found.");
+        return -1;
+    }
+
+    args[0] = INSMOD_PATH;
+    args[1] = EXFAT_MODULE;
+    args[2] = NULL;
+
+    rc = logwrap(3, args, 1);
+
+    if (rc == 0) {
+        SLOGI("exFAT module loaded OK");
+        return 0;
+    } else {
+        SLOGE("Loading exFAT module failed (unknown exit code %d)", rc);
         errno = EIO;
         return -1;
     }
