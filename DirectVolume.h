@@ -40,7 +40,7 @@ protected:
     int            mOrigDiskMinor;
     int            mOrigPartMinors[MAX_PARTITIONS];
     int            mDiskNumParts;
-    unsigned char  mPendingPartMap;
+    int            mPendingPartMap;
     int            mIsDecrypted;
     int            mFlags;
 

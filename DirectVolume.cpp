@@ -31,7 +31,8 @@
 #include "ResponseCode.h"
 #include "cryptfs.h"
 
-//#define PARTITION_DEBUG
+#define PARTITION_DEBUG 1
+#define NETLINK_DEBUG 1
 
 DirectVolume::DirectVolume(VolumeManager *vm, const char *label,
                            const char *mount_point, int partIdx) :

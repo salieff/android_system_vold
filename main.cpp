@@ -35,6 +35,9 @@
 #include "AutoVolume.h"
 #include "cryptfs.h"
 
+#define PARTITION_DEBUG 1
+#define NETLINK_DEBUG 1
+
 static int process_config(VolumeManager *vm);
 static void coldboot(const char *path);
 static int emmc_name_to_number(const char *name);
