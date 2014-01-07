@@ -53,7 +53,6 @@ extern "C" int logwrap(int argc, const char **argv, int background);
 int Exfat::doMount(const char *fsPath, const char *mountPoint,
                  bool ro, bool remount, bool executable,
                  int ownerUid, int ownerGid, int permMask, bool createLost) {
-{
     if (!moduleLoaded)
     {
         int lkm_rc = loadModule();

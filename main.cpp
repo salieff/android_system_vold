@@ -37,6 +37,7 @@
 
 static int process_config(VolumeManager *vm);
 static void coldboot(const char *path);
+static int emmc_name_to_number(const char *name);
 
 int main() {
 
@@ -226,8 +227,8 @@ static int process_config(VolumeManager *vm) {
                 SLOGE("Error parsing partition");
                 goto out_syntax;
             }
-            if (strcmp(part, "auto") && atoi(part) == 0) {
-                SLOGE("Partition must either be 'auto' or 1 based index instead of '%s'", part);
+            if (strcmp(part, "auto") && atoi(part) == 0 && strncmp(part, "emmc@", 5)) {
+                SLOGE("Partition must either be 'auto', 'emmc@xxx'  or 1 based index instead of '%s'", part);
                 goto out_syntax;
             }
 
@@ -238,6 +239,13 @@ static int process_config(VolumeManager *vm) {
                 if (!dv) {
                      if (!strcmp(part, "auto")) {
                         dv = new DirectVolume(vm, label, mount_point, -1);
+                    } else if (!strncmp(part, "emmc@", 5)) {
+                        int part_n = emmc_name_to_number(part + 5);
+                        if (part_n < 0) {
+                            SLOGE("EMMC partition '%s' not found", part);
+                            goto out_syntax;
+                        }
+                        dv = new DirectVolume(vm, label, mount_point, part_n);
                     } else {
                         dv = new DirectVolume(vm, label, mount_point, atoi(part));
                     }
@@ -283,4 +291,81 @@ out_syntax:
 out_fail:
     fclose(fp);
     return -1;   
+}
+
+// MTK fstab syntax "emmc@xxx" support
+
+#define MAX_EMMC_PARTITIONS 16
+
+static struct {
+    char name[16];
+    int number;
+} emmc_part_map[MAX_EMMC_PARTITIONS];
+
+static int emmc_part_count = -1;
+
+static void find_emmc_partitions(void)
+{
+    FILE *fd = fopen("/proc/emmc", "r");
+    if (fd == NULL)
+    {
+        SLOGE("[find_emmc_partitions] can't open /proc/emmc : %d", errno);
+        return;
+    }
+
+    char line[1025] = {0};
+    while (fgets(line, sizeof(line), fd))
+    {
+        int partno = -1;
+        int start_sect = -1;
+        int nr_sects = -1;
+        char partition_name[16] = {0};
+
+        int r = sscanf(line, "emmc_p%d: %x %x %15s", &partno, &start_sect, &nr_sects, partition_name);
+
+        if (r == 4 && partition_name[0] == '"')
+        {
+            char *x = strchr(partition_name + 1, '"');
+            if (x)
+                *x = 0;
+
+#ifdef PARTITION_DEBUG
+            SLOGD("[find_emmc_partitions] emmc partition %d, %s", partno, partition_name + 1);
+#endif
+
+            if (emmc_part_count < MAX_EMMC_PARTITIONS)
+            {
+                strcpy(emmc_part_map[emmc_part_count].name, partition_name + 1);
+                emmc_part_map[emmc_part_count].number = partno;
+                ++emmc_part_count;
+            }
+            else
+            {
+                SLOGE("[find_emmc_partitions] too many emmc partitions : %d >= %d", emmc_part_count, MAX_EMMC_PARTITIONS);
+            }
+        }
+#ifdef PARTITION_DEBUG
+        else
+        {
+            SLOGD("[find_emmc_partitions] skip malformed string %s", line);
+        }
+#endif
+    }
+
+    fclose(fd);
+}
+
+static int emmc_name_to_number(const char *name)
+{
+    if (emmc_part_count < 0)
+    {
+        emmc_part_count = 0;
+        find_emmc_partitions();
+    }
+
+    for (int i = 0; i < emmc_part_count; ++i)
+        if (!strcmp(name, emmc_part_map[i].name))
+            return emmc_part_map[i].number;
+
+    return -1;
 }
