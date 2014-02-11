@@ -53,12 +53,11 @@ int Ntfs::check(const char *fsPath) {
     }
 
     int rc = 0;
-    const char *args[4];
+    const char *args[3];
     /* we first use -n to do ntfs detection */
     args[0] = NTFS_FIX_PATH;
     args[1] = "-n";
     args[2] = fsPath;
-    args[3] = NULL;
 
     rc = logwrap(3, args, 1);
     if (rc) {
@@ -71,7 +70,6 @@ int Ntfs::check(const char *fsPath) {
     /* do the real fix */
     /* redo the ntfsfix without -n to fix problems */
     args[1] = fsPath;
-    args[2] = NULL;
 
     rc = logwrap(2, args, 1);
     if (rc) {
@@ -89,7 +87,7 @@ int Ntfs::doMount(const char *fsPath, const char *mountPoint,
                  int ownerUid, int ownerGid, int permMask, bool createLost) {
     int rc;
     char mountData[255];
-    const char *args[6];
+    const char *args[5];
 
     /*
      * Note: This is a temporary hack. If the sampling profiler is enabled,
@@ -124,7 +122,6 @@ int Ntfs::doMount(const char *fsPath, const char *mountPoint,
     args[2] = mountData;
     args[3] = fsPath;
     args[4] = mountPoint;
-    args[5] = NULL;
 
     rc = logwrap(5, args, 1);
 

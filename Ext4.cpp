@@ -77,12 +77,11 @@ int Ext4::check(const char *fsPath) {
 
     int rc = -1;
     do {
-        const char *args[5];
+        const char *args[4];
         args[0] = E2FSCK_PATH;
         args[1] = "-p";
         args[2] = "-f";
         args[3] = fsPath;
-        args[4] = NULL;
 
         rc = logwrap(4, args, 1);
 
@@ -115,13 +114,12 @@ int Ext4::check(const char *fsPath) {
 
 int Ext4::format(const char *fsPath) {
     int fd;
-    const char *args[4];
+    const char *args[3];
     int rc;
 
     args[0] = MKEXT4FS_PATH;
     args[1] = "-J";
     args[2] = fsPath;
-    args[3] = NULL;
     rc = logwrap(3, args, 1);
 
     if (rc == 0) {

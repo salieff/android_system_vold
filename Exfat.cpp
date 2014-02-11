@@ -129,31 +129,138 @@ int Exfat::check(const char *fsPath) {
     do {
         const char *args[3];
         args[0] = EXFAT_FSCK;
-        args[1] = fsPath;
-        args[2] = NULL;
+        args[1] = "-R";
+        args[2] = fsPath;
 
         rc = logwrap(3, args, 1);
 
         switch(rc) {
         case 0:
-            SLOGI("exFAT filesystem check completed OK.\n");
+            SLOGI("[Exfat::check] No errors\n");
             return 0;
+
         case 1:
-            SLOGI("exFAT filesystem check completed, errors corrected OK.\n");
-            return 0;
-        case 2:
-            SLOGE("exFAT filesystem check completed, errors corrected, need reboot.\n");
-            return 0;
-        case 4:
-            SLOGE("exFAT filesystem errors left uncorrected.\n");
-            return 0;
-        case 8:
-            SLOGE("exfatfsck operational error.\n");
+            SLOGE("[Exfat::check] Device I/O error.\n");
             errno = EIO;
             return -1;
+
+        case 2:
+            SLOGE("[Exfat::check] Partition Boot Record currupted.\n");
+            errno = EBADF;
+            return -1;
+
+        case 3:
+            SLOGE("[Exfat::check] Invalid data structure.\n");
+            errno = EINVAL;
+            return -1;
+
+        case 4:
+            SLOGI("[Exfat::check] Filesystem was modified.\n");
+            return 0;
+
+        case 5:
+            SLOGE("[Exfat::check] Device mounted.\n");
+            errno = EBUSY;
+            return -1;
+
+        case 6:
+            SLOGE("[Exfat::check] Device not mounted.\n");
+            errno = ENOENT;
+            return -1;
+
+        case 7:
+            SLOGE("[Exfat::check] Semaphore error.\n");
+            errno = EIO;
+            return -1;
+
+        case 8:
+            SLOGE("[Exfat::check] Invalid file name.\n");
+            errno = EINVAL;
+            return -1;
+
+        case 9:
+            SLOGE("[Exfat::check] Invalid file ID.\n");
+            errno = EINVAL;
+            return -1;
+
+        case 10:
+            SLOGE("[Exfat::check] Device not found.\n");
+            errno = ENODEV;
+            return -1;
+
+        case 11:
+            SLOGE("[Exfat::check] File exists.\n");
+            errno = EEXIST;
+            return -1;
+
+        case 12:
+            SLOGE("[Exfat::check] Permission error.\n");
+            errno = EPERM;
+            return -1;
+
+        case 13:
+            SLOGE("[Exfat::check] File not opened.\n");
+            errno = EIO;
+            return -1;
+
+        case 14:
+            SLOGE("[Exfat::check] Too many files opened.\n");
+            errno = EMFILE;
+            return -1;
+
+        case 15:
+            SLOGE("[Exfat::check] File system full.\n");
+            errno = ENOSPC;
+            return -1;
+
+        case 16:
+            SLOGE("[Exfat::check] End of file.\n");
+            errno = EIO;
+            return -1;
+
+        case 17:
+            SLOGE("[Exfat::check] Directory busy.\n");
+            errno = EBUSY;
+            return -1;
+
+        case 18:
+            SLOGE("[Exfat::check] Memory allocation failed.\n");
+            errno = ENOMEM;
+            return -1;
+
+        case 19:
+            SLOGE("[Exfat::check] File system size zero.\n");
+            errno = EINVAL;
+            return -1;
+
+        case 20:
+            SLOGE("[Exfat::check] Too few clusters.\n");
+            errno = EIO;
+            return -1;
+
+        case 21:
+            SLOGE("[Exfat::check] Too many clusters.\n");
+            errno = EIO;
+            return -1;
+
+        case 22:
+            SLOGE("[Exfat::check] File system corruption found.\n");
+            errno = EBADF;
+            return -1;
+
+        case 23:
+            SLOGE("[Exfat::check] Device not specified.\n");
+            errno = ENODEV;
+            return -1;
+
+        case 24:
+            SLOGE("[Exfat::check] Unknown options.\n");
+            errno = EINVAL;
+            return -1;
+
         default:
             SLOGE("exFAT filesystem check failed (unknown exit code %d).\n", rc);
-            errno = EIO;
+            errno = EINVAL;
             return -1;
         }
     } while (0);
@@ -162,7 +269,7 @@ int Exfat::check(const char *fsPath) {
 }
 
 int Exfat::format(const char *fsPath) {
-    const char *args[3];
+    const char *args[2];
     int rc = -1;
 
     if (access(EXFAT_MKFS, X_OK)) {
@@ -172,9 +279,8 @@ int Exfat::format(const char *fsPath) {
 
     args[0] = EXFAT_MKFS;
     args[1] = fsPath;
-    args[2] = NULL;
 
-    rc = logwrap(3, args, 1);
+    rc = logwrap(2, args, 1);
 
     if (rc == 0) {
         SLOGI("Filesystem (exFAT) formatted OK");
@@ -188,7 +294,7 @@ int Exfat::format(const char *fsPath) {
 }
 
 int Exfat::loadModule() {
-    const char *args[3];
+    const char *args[2];
     int rc = -1;
 
     if (access(INSMOD_PATH, X_OK)) {
@@ -203,9 +309,8 @@ int Exfat::loadModule() {
 
     args[0] = INSMOD_PATH;
     args[1] = EXFAT_MODULE;
-    args[2] = NULL;
 
-    rc = logwrap(3, args, 1);
+    rc = logwrap(2, args, 1);
 
     if (rc == 0) {
         SLOGI("exFAT module loaded OK");
